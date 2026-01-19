@@ -1,3 +1,10 @@
+// Package loki provides a logx.Logger adapter for sending structured logs
+// to Grafana Loki using HTTP API.
+//
+// It implements slogx.RemoteLogClient for integration with slogx loggers.
+//
+// Logs are sent asynchronously, and Shutdown must be called to ensure all
+// logs are flushed before application exit.
 package loki
 
 import (
@@ -5,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"io"
 	"net/http"
 	"os"
@@ -16,6 +22,9 @@ import (
 	"github.com/BugBuster401/logx/slogx"
 )
 
+// LokiClient is an HTTP client for sending logs to Grafana Loki.
+//
+// It is safe for concurrent use.
 type LokiClient struct {
 	URL     string
 	AppName string
@@ -23,6 +32,12 @@ type LokiClient struct {
 	wg      sync.WaitGroup
 }
 
+// NewLokiClient creates a new LokiClient.
+//
+// url     - base URL of the Loki instance
+// appName - used as the "app" label in all log entries
+//
+// Returns an error if the Loki server is not reachable.
 func NewLokiClient(url, appName string) (*LokiClient, error) {
 	lc := &LokiClient{
 		URL:     url,
@@ -37,6 +52,7 @@ func NewLokiClient(url, appName string) (*LokiClient, error) {
 	return lc, nil
 }
 
+// ping checks if the Loki server is ready.
 func (lc *LokiClient) ping() error {
 	req, err := http.NewRequest(http.MethodGet, lc.URL+"/ready", nil)
 	if err != nil {
@@ -56,15 +72,25 @@ func (lc *LokiClient) ping() error {
 	return nil
 }
 
+// LokiStream represents a single Loki stream in the push API.
 type LokiStream struct {
 	Stream map[string]string `json:"stream"`
 	Values [][]string        `json:"values"`
 }
 
+// LokiPayload represents the payload structure for Loki push API.
 type LokiPayload struct {
 	Streams []LokiStream `json:"streams"`
 }
 
+// Send sends a single log entry to Loki asynchronously.
+//
+// ctx   - context for request cancellation
+// entry - structured log entry
+//
+// Logs are sent in the background using a goroutine. Errors are written
+// to os.Stderr; this function does not block on sending logs.
+// Use Shutdown to wait for all logs to be flushed.
 func (lc *LokiClient) Send(ctx context.Context, entry slogx.LogEntry) error {
 	labels := map[string]string{
 		"app":   lc.AppName,
@@ -72,7 +98,9 @@ func (lc *LokiClient) Send(ctx context.Context, entry slogx.LogEntry) error {
 	}
 
 	data := make(map[string]any, len(entry.Fields)+2)
-	data["message"] = entry.Message
+	data["time"] = entry.Timestamp.Format(time.RFC3339Nano)
+	data["level"] = entry.Level
+	data["msg"] = entry.Message
 
 	for k, v := range entry.Fields {
 		data[k] = v
@@ -136,6 +164,10 @@ func (lc *LokiClient) Send(ctx context.Context, entry slogx.LogEntry) error {
 	return nil
 }
 
+// Shutdown waits for all background log sends to finish.
+//
+// ctx - context for cancellation; if ctx is done before all logs are sent,
+// returns ctx.Err()
 func (lc *LokiClient) Shutdown(ctx context.Context) error {
 	done := make(chan struct{})
 
