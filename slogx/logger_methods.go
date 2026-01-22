@@ -2,6 +2,7 @@ package slogx
 
 import (
 	"context"
+	"io"
 	"log/slog"
 
 	"github.com/BugBuster401/logx"
@@ -49,4 +50,10 @@ func toAttrs(fields []logx.Field) []slog.Attr {
 		attrs[i] = slog.Any(f.Key, f.Value)
 	}
 	return attrs
+}
+
+func (l *Logger) Noop() logx.Logger {
+	return &Logger{
+		logger: slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+	}
 }
