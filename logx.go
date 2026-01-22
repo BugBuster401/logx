@@ -41,8 +41,4 @@ type Logger interface {
 	// WithGroup returns a new Logger that groups all subsequent
 	// fields under the specified name.
 	WithGroup(name string) Logger
-
-	// Noop returns a null Logger, which ignores all calls.
-	// Ideal for test scenarios where logging is not required.
-	Noop() Logger
 }
