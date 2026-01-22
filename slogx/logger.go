@@ -1,6 +1,7 @@
 package slogx
 
 import (
+	"io"
 	"log/slog"
 
 	"github.com/BugBuster401/logx"
@@ -18,5 +19,13 @@ type Logger struct {
 func New(handler slog.Handler) logx.Logger {
 	return &Logger{
 		logger: slog.New(handler),
+	}
+}
+
+// Noop returns a null Logger, which ignores all calls.
+// Ideal for test scenarios where logging is not required.
+func Noop() logx.Logger {
+	return &Logger{
+		logger: slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
 	}
 }
